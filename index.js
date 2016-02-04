@@ -1,5 +1,5 @@
 var S = {
-	showString:["O(∩_∩)O","\\(^o^)/","T—T"],
+	showString:["letter|魑","image|3","letter|O(∩_∩)O~","image|1"],
 	init:function(){
 		S.Drawing.init(".canvas");
 		var dot = new S.Dot(100,100);
@@ -173,7 +173,9 @@ S.Dot.prototype = {
 };
 S.Drawing = (function(){
 	var canvas,
+		canvasCatch,
     	context,
+    	contextCatch,
         renderFn,
 	    requestFrame = window.requestAnimationFrame       ||
 	                   window.webkitRequestAnimationFrame ||
@@ -187,6 +189,8 @@ S.Drawing = (function(){
 		init:function(ele){
 			canvas = document.querySelector(ele);
 			context = canvas.getContext('2d');
+			canvasCatch = document.createElement('canvas');
+			contextCatch = canvasCatch.getContext('2d');
 			this.adjustCanvas();
 
 			window.addEventListener('resize', function (e) {
@@ -199,27 +203,61 @@ S.Drawing = (function(){
 		adjustCanvas:function(){
 			canvas.width = window.innerWidth;
       		canvas.height = window.innerHeight;
+      		canvasCatch.width = canvas.width;
+      		canvasCatch.height = canvas.height;
 		},
 		clearFrame: function(){
 			context.clearRect(0, 0, canvas.width, canvas.height);
+			contextCatch.clearRect(0, 0, canvasCatch.width, canvasCatch.height);
 		},
 		loop:function(fn){
 			renderFn = !renderFn ? fn : renderFn;
 			this.clearFrame();
 			renderFn();
+			context.drawImage(canvasCatch , 0, 0);
 			requestFrame.call(window,this.loop.bind(this));
 		},
 		drawCircle: function (p, c) {
-			context.fillStyle = c.render();
-			context.beginPath();
-			context.arc(p.x, p.y, p.z, 0, 2 * Math.PI, true);
-			context.closePath();
-			context.fill();
+			contextCatch.fillStyle = c.render();
+			contextCatch.beginPath();
+			contextCatch.arc(p.x, p.y, p.z, 0, 2 * Math.PI, true);
+			contextCatch.closePath();
+			contextCatch.fill();
 		},
 		drawLetter: function(l) {
 			S.Shape.switchShape(S.ShapeBuilder.letter(l));
+		},
+		drawImage: function(index) {
+			S.ShapeBuilder.imageFile(index,function(arg){
+				S.Shape.switchShape(arg);
+			});
 		}
 	};                  
+}());
+/**
+ * canvas绘制图形命令处理
+ */
+S.Commond = (function(){
+	var commondHash = {
+		"letter":function(l){
+			S.Drawing.drawLetter(l);
+		},
+		"image":function(index){
+			S.Drawing.drawImage(index);
+		}
+	}
+	return {
+		exce: function(commondString){
+			var c,args,tempSplit;
+			if(typeof commondString !== "string" || commondString.indexOf('|') === -1){
+				return;
+			}
+			tempSplit = commondString.split("|");
+			c = tempSplit[0];
+			args = tempSplit[1];
+			typeof commondHash[c] !== "undefined" && commondHash[c](args);
+		}
+	}
 }());
 //粒子绘制图形
 S.Shape = (function(){
@@ -386,6 +424,26 @@ S.ShapeBuilder = (function(){
 			shapeContext.fillText(l, shapeCanvas.width/2, shapeCanvas.height/2);
 			//2.处理canvas转化为一堆点,返回粒子图形的信息（一堆带坐标的点）
 			return processCanvas();
+		},
+		/**
+		 * 构建图像
+		 */
+		imageFile: function (index,callback) {
+			var image = new Image(),
+			  a = S.Drawing.getArea();
+
+			image.onload = function () {
+				shapeContext.clearRect(0, 0, shapeCanvas.width, shapeCanvas.height);
+				shapeContext.drawImage(this, 0, 0, a.w * 0.9, a.w * 0.9);
+				callback(processCanvas());
+			};
+
+			image.onerror = function () {
+				console.error("error");
+				callback({});
+			}
+
+			image.src = './img/pic'+index+'.jpg';
 		}
 	}
 }());
@@ -402,24 +460,22 @@ S.SceneController = (function(){
 		}else{
 			sceneQueue.shift();
 		}
-		interval = setInterval(function(){
-			if(sceneQueue.length === 0){
-				clearInterval(interval);
-				state = 0;
-				return;
-			}
-			fn(sceneQueue[0]);
-			if(isRepeat){ 
-				sceneQueue.push(sceneQueue.shift());
-			}else{
-				sceneQueue.shift()
-			}
+		if(sceneQueue.length === 0){
+			clearTimeout(interval);
+			state = 0;
+			return;
+		}
+		interval = setTimeout(function(){
+			timedAction(fn, t, isRepeat);
 		},t);
     }
     function run(){
+    	// timedAction(function(arg){
+    	// 	S.Drawing.drawLetter(arg);
+    	// },delay,false);
     	timedAction(function(arg){
-    		S.Drawing.drawLetter(arg);
-    	},delay,true);
+    		S.Commond.exce(arg);
+    	},delay,false);
     }
     return {
     	performAction:function(arg){
